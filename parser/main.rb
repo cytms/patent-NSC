@@ -58,12 +58,8 @@ if ARGV.count == 1
     	patent_id = row['Patent_id']
     	html = get_html(row['html'])
     	puts row['Patent_id'] + row['html']
-
-    	#break
-    
-		#html = get_html( patent_id , year_lookup(issued_year_table, patent_id))
-		tables = html[0].xpath('//table')
-		fonts = html[0].xpath('//font')
+		# tables = html[0].xpath('//table')
+		# fonts = html[0].xpath('//font')
 		paragraphs = html[0].xpath('//p')
 		#table of Patent##########################
 		patent_attrs = []
@@ -100,26 +96,66 @@ if ARGV.count == 1
 			# a.relatedTable[0].each do |content|
 			# 	patent_attrs << content[1]
 			# end
-			# # patent_attrs << a.relatedTable[0][1][1]#-----------["relt_appl_id", "09490342"]---------
-			# # patent_attrs << a.relatedTable[0][2][1]
-			# # patent_attrs << a.relatedTable[0][3][1]
-			# # patent_attrs << a.relatedTable[0][4][1]
-			i += 2
-		else
-			(1..4).each do |j|
+			########################### A title		
+			patent_attrs << title( html[i] )
+			########################### A abstract		
+			patent_attrs << abstract( html[i] )
+			i += 1
+			########################### C inventors_line 
+			patent_attrs << getInventor(html[i])
+			########################### A assignee_line  
+			patent_attrs << assignee_line( html[i] )
+			########################### A	appl_id
+			patent_attrs << appl_id( html[i] )
+			########################### A	filing_date
+			patent_attrs << filing_date( html[i] )
+			i += 1 # i = 5
+			########################### A	relt_appl_id, A	relt_filing_date, A	relt_patent_id, A relt_issue_date
+			# only one or more relt????????????????
+			if (html[i].xpath("//text()")[0].to_s.strip <=> "Related U.S. Patent Documents")==0
+				patent_attrs << getRelatedPatent( html[i+1].xpath("//tr")[2..-2].to_s )
+				# a = RelatedPatent.new(html[i+1].xpath("//tr")[2..-2].to_s)
+				# # puts a.relatedTable
+				# a.relatedTable[0].each do |content|
+				# 	patent_attrs << content[1]
+				# end
+				# # patent_attrs << a.relatedTable[0][1][1]#-----------["relt_appl_id", "09490342"]---------
+				# # patent_attrs << a.relatedTable[0][2][1]
+				# # patent_attrs << a.relatedTable[0][3][1]
+				# # patent_attrs << a.relatedTable[0][4][1]
+				i += 2
+			else
+				(1..4).each do |j|
+					patent_attrs << nil
+				end
+			end
+			
+			########################### B	USPC_line
+			uspc = USPC.new(html[i].xpath("//tr[1]/td[2]")[0].to_s)
+			patent_attrs << uspc.uspcLine
+			########################### B	IPC_line
+			ipc = IPC.new(html[i].xpath("//tr[2]/td[2]")[0].to_s)
+			patent_attrs << ipc.ipcLine		
+			########################### B	CPC_line 
+			if (html[i].xpath("//text()")[0].to_s.strip <=> "Current CPC Class")==0
+				cpc = CPC.new(html[i].xpath("//tr[2]/td[2]")[0].to_s)
+				patent_attrs << cpc.cpc_line
+			else
 				patent_attrs << nil
 			end
 		end
 		
 		########################### B	USPC_line
-		uspc = USPC.new(html[i].xpath("//tr[1]/td[2]")[0].to_s)
+		pctable = html[i].xpath("//table").last
+		uspc = USPC.new(pctable.xpath("tr[1]/td[2]")[0].to_s)
+		# uspc = USPC.new(html[i].xpath("//tr[1]/td[2]")[0].to_s)
 		patent_attrs << uspc.uspcLine
 		########################### B	IPC_line
-		ipc = IPC.new(html[i].xpath("//tr[2]/td[2]")[0].to_s)
+		ipc = IPC.new(pctable.xpath("tr[2]/td[2]")[0].to_s)
 		patent_attrs << ipc.ipcLine		
 		########################### B	CPC_line 
 		if (html[i].xpath("//text()")[0].to_s.strip <=> "Current CPC Class")==0
-			cpc = CPC.new(html[i].xpath("//tr[2]/td[2]")[0].to_s)
+			cpc = CPC.new(pctable.xpath("tr[2]/td[2]")[0].to_s)
 			patent_attrs << cpc.cpc_line
 		else
 			patent_attrs << nil
@@ -178,7 +214,6 @@ if ARGV.count == 1
 					s = s + ", '#{att}'"
 				end
 				s = s + ')'
-				# File.open("query.txt", "w") { |file| file.write(s) }
 				@new_patent.query( s )
 				puts "patent done!"
 			}
@@ -208,8 +243,7 @@ if ARGV.count == 1
 					# File.open("query_inventor.txt", "w") { |file| file.write(s) }
 					@new_patent.query( s )
 				end
-				
-				puts "inventor done!"
+				puts "uspc done!"
 			}
 		rescue => ex
 		    puts "Error: #{ex}"
@@ -217,23 +251,14 @@ if ARGV.count == 1
 			retry
 		end
 		####################################################################################
-		#table of USPC######################################################################
+		#table of IPC#######################################################################
 		####################################################################################
 		begin
 			Timeout::timeout(600){
-				uspc.uspcTable.each do |row|
-
-					s = "INSERT INTO `patent`.`uspc` 
-						(`patent_id`, `USPC_class`, `level_1`, `level_2`) 
-						VALUES ("
-					s = s + "'#{patent_id}', '#{row['USPC_class']}', '#{row['level_1']}', '#{row['level_2']}'"
-					
-					s = s + ')'
-					# File.open("query_uspc.txt", "w") { |file| file.write(s) }
-
-					@new_patent.query( s )
-				end
-				puts "uspc done!"
+				ipc.ipcTable.each do |row|
+						@new_patent.query( s )
+					end
+					puts "uspc done!"
 			}
 		rescue => ex
 		    puts "Error: #{ex}"
